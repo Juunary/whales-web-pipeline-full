@@ -7,4 +7,4 @@ def classify_token(contract: str | None) -> str:
     c = contract.lower()
     if c in BTC_PEGS: return "BTC"
     if c in STABLES: return "STABLE"
-    return "ALT"
+    return "ALT" 

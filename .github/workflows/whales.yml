@@ -4,14 +4,15 @@ on:
   workflow_dispatch:
   schedule:
     - cron: "0 */6 * * *"
-push:
-    branches: [ main ]      # 기본 브랜치에서만
-    paths:                   # 관련 파일 변경에만 트리거
+  push:
+    branches: [ main ]
+    paths:
       - 'scraper/**'
       - 'backend/**'
       - 'pipelines/**'
       - 'common/**'
       - '.github/workflows/whales.yml'
+
 permissions:
   contents: write
   pages: write

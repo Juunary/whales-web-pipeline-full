@@ -36,6 +36,18 @@ jobs:
           pip install -r requirements.txt
           python -m playwright install --with-deps
 
+      - name: Scrape Etherscan Rich List
+        env:
+          NODE_OPTIONS: "--max-old-space-size=4096"
+        run: |
+          mkdir -p data
+          # 처음엔 페이지 수를 줄여 성공률 확인 → 성공하면 60→120→400으로 늘리세요.
+          python scraper/scrape_etherscan.py \
+            --pages 60 --ps 100 \
+            --out data/addresses.csv \
+            --retries 3 --sleep-ms 700 --wait-timeout-ms 20000
+          echo "Scraped addresses:" $(wc -l data/addresses.csv || true)
+
       - name: Scrape Etherscan Top Accounts
         run: |
           mkdir -p data

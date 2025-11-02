@@ -20,6 +20,8 @@ def save_heatmap(matrix, title, outfile: Path):
 def main(address_csv: str, out_dir: str):
     out = Path(out_dir); (out/"data").mkdir(parents=True, exist_ok=True); (out/"images").mkdir(parents=True, exist_ok=True)
     addrs = pd.read_csv(address_csv)["address"].dropna().astype(str).tolist()
+    if not addrs:
+        raise SystemExit("addresses.csv is empty — scraper failed (bot protection or DOM change). Check scraper logs.")
     res = asyncio.run(analyze_addresses(addrs, exclude_contracts=True))
 
     avg = {"timestamp_utc": int(pd.Timestamp.utcnow().timestamp()), "blocks": res["blocks"], "averages_T": res["averages_T"], "wallet_count": int(len(res["W_T"]))}

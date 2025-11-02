@@ -48,8 +48,11 @@ jobs:
           MORALIS_API_KEY: ${{ secrets.MORALIS_API_KEY }}
           COINGECKO_API_KEY: ${{ secrets.COINGECKO_API_KEY }}
           ALCHEMY_API_KEY: ${{ secrets.ALCHEMY_API_KEY }}
+          PYTHONPATH: ${{ github.workspace }}   # ← 레포 루트를 파이썬 경로에 추가
+          MPLBACKEND: Agg   
         run: |
-          python pipelines/run_pipeline.py --addresses data/addresses.csv --out site
+          test -s data/addresses.csv || { echo "addresses.csv not found"; exit 1; }
+          python -m pipelines.run_pipeline --addresses data/addresses.csv --out site
 
       - name: Upload ZIP artifact
         run: zip -r whales_site_artifacts.zip site data || true

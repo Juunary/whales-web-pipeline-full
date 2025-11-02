@@ -50,7 +50,7 @@ jobs:
           echo "Rows:" $(wc -l data/addresses.csv || true)
 
       # --- 분석 파이프라인 실행 (CoinGecko 안정화 환경 변수 추가) ---
-      - name: Run Analysis Pipeline
+      - name: Run Analysis Pipeline (today + T-1M/1W/24H)
         env:
           ETHERSCAN_API_KEY: ${{ secrets.ETHERSCAN_API_KEY }}
           MORALIS_API_KEY: ${{ secrets.MORALIS_API_KEY }}
@@ -58,13 +58,12 @@ jobs:
           ALCHEMY_API_KEY: ${{ secrets.ALCHEMY_API_KEY }}
           PYTHONPATH: ${{ github.workspace }}
           MPLBACKEND: Agg
-          # CoinGecko 레이트리밋 방지 및 청크 크기 설정 (backend/compute.py와 연동)
           CG_MAX_CONTRACTS_PER_RUN: "200"
           CG_CHUNK: "60"
         run: |
           test -s data/addresses.csv || { echo "addresses.csv not found"; exit 1; }
           python -m pipelines.run_pipeline --addresses data/addresses.csv --out site
-
+          
       - name: Upload ZIP artifact
         run: zip -r whales_site_artifacts.zip site data || true
       - uses: actions/upload-artifact@v4

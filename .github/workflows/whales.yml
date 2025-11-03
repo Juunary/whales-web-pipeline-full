@@ -3,7 +3,7 @@ name: whales-dynamic-pipeline
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 */6 * * *"
+    - cron: "0 */6 * * *"   # every 6 hours (UTC)
   push:
     branches: [ main ]
     paths:
@@ -11,16 +11,26 @@ on:
       - 'backend/**'
       - 'pipelines/**'
       - 'common/**'
+      - 'site/**'
       - '.github/workflows/whales.yml'
 
+# Minimal permissions recommended by GitHub Pages actions
 permissions:
-  contents: write
+  contents: read
   pages: write
   id-token: write
+
+concurrency:
+  group: whales-dynamic-pages
+  cancel-in-progress: true
 
 jobs:
   run-and-deploy:
     runs-on: ubuntu-latest
+    # 'environment' helps surface the deployed URL in the UI (optional)
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -36,19 +46,16 @@ jobs:
           pip install -r requirements.txt
           python -m playwright install --with-deps
 
-     
-      - name: Scrape Etherscan Top Accounts (400 Pages)
-        env:
-          NODE_OPTIONS: "--max-old-space-size=4096"
+      - name: Scrape Etherscan Rich List
         run: |
           mkdir -p data
+          # 첫 실행 시 페이지 수를 낮게 두고 성공 확인 → 점차 증가 권장
           python scraper/scrape_etherscan.py \
-            --pages 400 --ps 100 \
+            --pages 60 --ps 100 \
             --out data/addresses.csv \
             --retries 3 --sleep-ms 700 --wait-timeout-ms 20000
-          echo "Rows:" $(wc -l data/addresses.csv || true)
+          test -s data/addresses.csv || { echo "addresses.csv is empty"; exit 1; }
 
-      # --- 분석 파이프라인 실행 (CoinGecko 안정화 환경 변수 추가) ---
       - name: Run Analysis Pipeline (today + T-1M/1W/24H)
         env:
           ETHERSCAN_API_KEY: ${{ secrets.ETHERSCAN_API_KEY }}
@@ -60,24 +67,33 @@ jobs:
           CG_MAX_CONTRACTS_PER_RUN: "200"
           CG_CHUNK: "60"
         run: |
-          test -s data/addresses.csv || { echo "addresses.csv not found"; exit 1; }
           python -m pipelines.run_pipeline --addresses data/addresses.csv --out site
-          
-      - name: Upload ZIP artifact
+
+      - name: Zip artifacts (optional)
         run: zip -r whales_site_artifacts.zip site data || true
-      - uses: actions/upload-artifact@v4
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
         with:
           name: whales_artifacts
           path: |
             whales_site_artifacts.zip
             site/**
 
+      # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+      # GitHub Pages steps (configure -> upload -> deploy)
+      # 'enablement: true' ensures Pages is enabled if not already
       - name: Setup Pages
         uses: actions/configure-pages@v5
-      - name: Upload site artifact
+        with:
+          enablement: true
+
+      - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: site
+
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+      # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<

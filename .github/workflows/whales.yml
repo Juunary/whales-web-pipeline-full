@@ -123,7 +123,7 @@ jobs:
           echo "  2) Manually enable Pages: Settings → Pages → Build and deployment → Source: GitHub Actions"
           exit 1
 
-      # ============== 업로드 & 배포 =======================
+      # ============== 업로드 & 배포 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:

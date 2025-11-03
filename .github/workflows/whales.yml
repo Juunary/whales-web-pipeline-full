@@ -64,6 +64,7 @@ jobs:
           MPLBACKEND:        Agg
           CG_MAX_CONTRACTS_PER_RUN: "200"
           CG_CHUNK: "60"
+          EXCLUDE_CONTRACTS: "false"
         run: |
           python -m pipelines.run_pipeline --addresses data/addresses.csv --out site
 

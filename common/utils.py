@@ -33,7 +33,7 @@ ALCHEMY_API_KEY = os.getenv("ALCHEMY_API_KEY")
 # Moralis 키를 가져옵니다. 
 MORALIS_KEY = os.getenv("MORALIS_API_KEY","")
 HDR_MORALIS = {"X-API-Key": MORALIS_KEY, "accept":"application/json"}
-
+# Etherscan 헤더 정의
 # CoinGecko 헤더 정의: 키가 있으면 Pro API 헤더를 추가합니다.
 HDR_CG = {"accept":"application/json"}
 if COINGECKO_API_KEY:

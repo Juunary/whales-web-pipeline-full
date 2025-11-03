@@ -21,7 +21,8 @@ def main(address_csv: str, out_dir: str):
     out = Path(out_dir); (out/"data").mkdir(parents=True, exist_ok=True); (out/"images").mkdir(parents=True, exist_ok=True)
     addrs = pd.read_csv(address_csv)["address"].dropna().astype(str).tolist()
     if not addrs:
-        raise SystemExit("addresses.csv is empty — scraper failed (bot protection or DOM change). Check scraper logs.")
+        raise SystemExit("addresses.csv is empty — scraper blocked or DOM changed. Check scraper logs.")
+
     res = asyncio.run(analyze_addresses(addrs, exclude_contracts=True))
 
     avg = {"timestamp_utc": int(pd.Timestamp.utcnow().timestamp()), "blocks": res["blocks"], "averages_T": res["averages_T"], "wallet_count": int(len(res["W_T"]))}
@@ -37,7 +38,10 @@ def main(address_csv: str, out_dir: str):
     print("[pipeline] done →", out.resolve())
 
 if __name__ == "__main__":
-    import argparse
+    import argparse, sys
+    from pathlib import Path
+    # Ensure repo root on sys.path when run as a script
+    sys.path.append(str(Path(__file__).resolve().parents[1]))
     ap = argparse.ArgumentParser()
     ap.add_argument("--addresses", required=True)
     ap.add_argument("--out", default="site")

@@ -36,8 +36,7 @@ jobs:
           pip install -r requirements.txt
           python -m playwright install --with-deps
 
-      # --- Etherscan Top Accounts 스크래핑 (단일 스텝으로 통일) ---
-      # 타임아웃 문제를 해결하기 위해 안정화 옵션을 적용하고 페이지 수를 늘립니다.
+     
       - name: Scrape Etherscan Top Accounts (400 Pages)
         env:
           NODE_OPTIONS: "--max-old-space-size=4096"
@@ -53,11 +52,11 @@ jobs:
       - name: Run Analysis Pipeline (today + T-1M/1W/24H)
         env:
           ETHERSCAN_API_KEY: ${{ secrets.ETHERSCAN_API_KEY }}
-          MORALIS_API_KEY: ${{ secrets.MORALIS_API_KEY }}
+          MORALIS_API_KEY:   ${{ secrets.MORALIS_API_KEY }}
           COINGECKO_API_KEY: ${{ secrets.COINGECKO_API_KEY }}
-          ALCHEMY_API_KEY: ${{ secrets.ALCHEMY_API_KEY }}
-          PYTHONPATH: ${{ github.workspace }}
-          MPLBACKEND: Agg
+          ALCHEMY_API_KEY:   ${{ secrets.ALCHEMY_API_KEY }}
+          PYTHONPATH:        ${{ github.workspace }}
+          MPLBACKEND:        Agg
           CG_MAX_CONTRACTS_PER_RUN: "200"
           CG_CHUNK: "60"
         run: |

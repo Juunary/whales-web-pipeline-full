@@ -1,6 +1,5 @@
-# scraper/scrape_etherscan.py
 # -*- coding: utf-8 -*-
-import asyncio, csv, re, os, random, time
+import asyncio, csv, re, os, random
 from pathlib import Path
 from typing import List, Tuple
 from playwright.async_api import async_playwright, TimeoutError as PWTimeout
@@ -16,7 +15,6 @@ def looks_exchange(n):
     return any(k in n for k in EXCH)
 
 async def accept_cookies(page):
-    # Etherscan 쿠키 배너(OneTrust) 처리
     for sel in [
         "#onetrust-accept-btn-handler",
         "button:has-text('I agree')",
@@ -24,29 +22,24 @@ async def accept_cookies(page):
         "text=Allow all"
     ]:
         try:
-            await page.locator(sel).click(timeout=2000)
-            await asyncio.sleep(0.2)
+            await page.locator(sel).click(timeout=1500)
+            await asyncio.sleep(0.1)
             break
         except:
             pass
 
 def parse_rows_from_html(html: str) -> List[Tuple[str, str]]:
     rows = []
-    # 느슨하게 tr/td를 파지 말고, 페이지 전체에서 주소를 긁고 인접 텍스트를 name tag로 추정
-    # (Etherscan 구조 변경 대비)
     for m in ADDRESS_RE.finditer(html):
         addr = m.group(0)
-        # 근방 문자열에서 name tag 비스무리한 부분 추출(보조적)
         start = max(m.start() - 200, 0)
         end   = min(m.end() + 200, len(html))
         ctx = html[start:end]
-        # 간단히 >Name Tag</a> 같은 패턴 힌트
         nt = ""
         mm = re.search(r"Name\s*Tag.*?>\s*([^<]{1,64})<", ctx, flags=re.I)
         if mm:
             nt = mm.group(1).strip()
         rows.append((addr, nt))
-    # 주소 중복 제거(뒤쪽 name tag 우선)
     seen = {}
     for a, nt in rows:
         seen[a] = nt or seen.get(a, "")
@@ -55,26 +48,21 @@ def parse_rows_from_html(html: str) -> List[Tuple[str, str]]:
 async def parse_page(page, url: str, wait_timeout_ms: int) -> List[Tuple[str, str]]:
     await page.goto(url, wait_until="domcontentloaded", timeout=60000)
     await accept_cookies(page)
-
-    # 자동화 탐지 회피 스크립트(약함)
+    # webdriver 탐지 완화
     try:
         await page.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined});")
     except:
         pass
-
-    # 1차: DOM에 붙었는지(attached)만 확인 (visible은 배너/레이어에 막힐 수 있음)
     try:
+        # visible 대신 attached로 (오버레이가 있어도 DOM만 붙으면 파싱)
         await page.wait_for_selector("table tbody tr", state="attached", timeout=wait_timeout_ms)
     except PWTimeout:
-        # 폴백: HTML 통째로 파싱 시도 (반복적으로 UI 블락되면 이 경로가 살길)
         html = await page.content()
-        # 봇 차단/인증 페이지 감지
         lower = html.lower()
         if any(s in lower for s in ["verify you are human", "cf-browser-verification", "just a moment"]):
             raise RuntimeError("Blocked by anti-bot challenge")
         return parse_rows_from_html(html)
 
-    # DOM 파싱
     rows = []
     trs = await page.query_selector_all("table tbody tr")
     for tr in trs:
@@ -99,8 +87,8 @@ async def scrape(pages: int, ps: int, outpath: str, retries: int, sleep_ms: int,
     seen = set(); results = []
 
     ua = os.getenv("SCRAPER_UA",
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/123.0.0.0 Safari/537.36"
     )
 
     async with async_playwright() as p:
@@ -114,7 +102,7 @@ async def scrape(pages: int, ps: int, outpath: str, retries: int, sleep_ms: int,
             locale="en-US",
             timezone_id="UTC"
         )
-        # 리소스 절약(속도↑)
+        # 이미지/폰트 차단으로 속도 향상
         await context.route("**/*", lambda route: route.abort() if route.request.resource_type in ["image","font","media"] else route.continue_())
         page = await context.new_page()
 
@@ -124,12 +112,11 @@ async def scrape(pages: int, ps: int, outpath: str, retries: int, sleep_ms: int,
             for attempt in range(1, retries+1):
                 try:
                     rows = await parse_page(page, url, wait_timeout_ms)
-                    # 누적/필터
                     added = 0
                     for addr, nt in rows:
                         if addr not in seen:
                             seen.add(addr)
-                            if looks_exchange(nt):  # CEX 제거
+                            if looks_exchange(nt):
                                 continue
                             results.append((addr, nt))
                             added += 1
@@ -139,16 +126,13 @@ async def scrape(pages: int, ps: int, outpath: str, retries: int, sleep_ms: int,
                 except Exception as e:
                     print(f"[warn] page {i} attempt {attempt} error: {e}")
                     await asyncio.sleep(0.4 * attempt)
-            # 페이지 간 랜덤 슬립(봇탐지 우회 도움)
             await asyncio.sleep((sleep_ms + random.randint(0, 300)) / 1000.0)
             if not ok:
-                # 완전 실패한 페이지는 건너뛰되, 전체는 계속
                 continue
 
         await context.close()
         await browser.close()
 
-    # 저장
     with out.open("w", newline="") as f:
         w = csv.writer(f); w.writerow(["address","nametag"]); w.writerows(results)
     print(f"[done] {out} ({len(results)} addresses, after CEX keyword filter)")

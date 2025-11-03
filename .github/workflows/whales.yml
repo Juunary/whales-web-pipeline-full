@@ -14,11 +14,12 @@ on:
       - 'site/**'
       - '.github/workflows/whales.yml'
 
-# Minimal permissions recommended by GitHub Pages actions
+# GitHub Pages 권장 권한 + 폴백(브랜치 푸시/REST 호출) 대비 contents: write 필요 없음
+# (REST는 PAT로 호출하므로 GITHUB_TOKEN 권한은 최소화)
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: read     # code checkout
+  pages: write       # deploy-pages
+  id-token: write    # deploy-pages OIDC
 
 concurrency:
   group: whales-dynamic-pages
@@ -27,10 +28,9 @@ concurrency:
 jobs:
   run-and-deploy:
     runs-on: ubuntu-latest
-    # 'environment' helps surface the deployed URL in the UI (optional)
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -49,7 +49,7 @@ jobs:
       - name: Scrape Etherscan Rich List
         run: |
           mkdir -p data
-          # 첫 실행 시 페이지 수를 낮게 두고 성공 확인 → 점차 증가 권장
+          # 처음엔 페이지 수를 낮게(60) 설정해 성공 확인 후 점차 증가 권장
           python scraper/scrape_etherscan.py \
             --pages 60 --ps 100 \
             --out data/addresses.csv \
@@ -80,20 +80,55 @@ jobs:
             whales_site_artifacts.zip
             site/**
 
-      # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-      # GitHub Pages steps (configure -> upload -> deploy)
-      # 'enablement: true' ensures Pages is enabled if not already
-      - name: Setup Pages
+      # ============== GitHub Pages 활성화 시도 1: 공식 액션 ==================
+      - name: Setup Pages (official)
+        id: configure
         uses: actions/configure-pages@v5
         with:
           enablement: true
+        continue-on-error: true
 
+      - name: Check configure-pages result
+        id: cfg_status
+        run: |
+          echo "outcome=${{ steps.configure.outcome }}" >> $GITHUB_OUTPUT
+          echo "Configure-Pages outcome: ${{ steps.configure.outcome }}"
+
+      # ============== GitHub Pages 활성화 시도 2: REST API (PAT 폴백) =========
+      # configure-pages가 실패했고, PAGES_DEPLOY_PAT 시크릿이 있을 때만 실행
+      - name: Enable Pages via REST (fallback with PAT)
+        if: ${{ steps.configure.outcome != 'success' && secrets.PAGES_DEPLOY_PAT }}
+        id: enable_pages_rest
+        env:
+          GH_TOKEN: ${{ secrets.PAGES_DEPLOY_PAT }}
+          OWNER: ${{ github.repository_owner }}
+          REPO:  ${{ github.event.repository.name }}
+        run: |
+          echo "Enabling GitHub Pages (build_type=workflow) via REST..."
+          curl -fsSL -X POST \
+            -H "Authorization: token $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/$OWNER/$REPO/pages \
+            -d '{"build_type":"workflow"}'
+          echo "Waiting a few seconds for Pages to be provisioned..."
+          sleep 5
+
+      # 디버그: 폴백이 없고 configure 실패한 경우 친절한 안내 후 실패
+      - name: Fail if Pages cannot be enabled
+        if: ${{ steps.configure.outcome != 'success' && !secrets.PAGES_DEPLOY_PAT }}
+        run: |
+          echo "::error::GitHub Pages could not be enabled automatically."
+          echo "Either:"
+          echo "  1) Add a PAT in repo secrets as PAGES_DEPLOY_PAT (with repo scope), or"
+          echo "  2) Manually enable Pages: Settings → Pages → Build and deployment → Source: GitHub Actions"
+          exit 1
+
+      # ============== 업로드 & 배포 =======================
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: site
 
       - name: Deploy to GitHub Pages
-        id: deployment
+        id: deploy
         uses: actions/deploy-pages@v4
-      # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<

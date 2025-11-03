@@ -14,10 +14,11 @@ on:
       - 'site/**'
       - '.github/workflows/whales.yml'
 
+# gh-pages 브랜치 푸시가 필요하므로 contents: write 포함
 permissions:
-  contents: read     # checkout
-  pages: write       # deploy-pages
-  id-token: write    # deploy-pages OIDC
+  contents: write
+  pages: write
+  id-token: write
 
 concurrency:
   group: whales-dynamic-pages
@@ -46,7 +47,7 @@ jobs:
       - name: Scrape Etherscan Rich List
         run: |
           mkdir -p data
-          # 첫 실행은 pages를 낮게(60) → 성공 확인 후 점진 증가 권장
+          # 첫 실행은 페이지 수를 낮게: 성공 확인 후 점진 증가
           python scraper/scrape_etherscan.py \
             --pages 60 --ps 100 \
             --out data/addresses.csv \
@@ -77,37 +78,13 @@ jobs:
             whales_site_artifacts.zip
             site/**
 
-      # 1차: 공식 Pages 설정 시도 (권한/정책에 따라 실패할 수 있음)
+      # -------------------- 1차: 신형 Pages (Actions 방식) --------------------
       - name: Setup Pages (official; continue on error)
         id: configure
         uses: actions/configure-pages@v5
         with:
           enablement: true
         continue-on-error: true
-
-      # 2차: 공식 설정 실패 시, PAT로 REST API 폴백 (조건 분기는 셸 내부에서 처리)
-      - name: Enable Pages via REST (fallback with PAT)
-        id: enable_pages_rest
-        env:
-          PAGES_DEPLOY_PAT: ${{ secrets.PAGES_DEPLOY_PAT }}
-        run: |
-          CFG="${{ steps.configure.outcome }}"
-          echo "configure-pages outcome: '${CFG}'"
-          if [ "$CFG" != "success" ] && [ -n "$PAGES_DEPLOY_PAT" ]; then
-            echo "Falling back to REST enablement with PAT..."
-            REF="${{ github.repository }}"        # e.g. owner/repo
-            OWNER="${REF%%/*}"
-            REPO="${REF##*/}"
-            curl -fsSL -X POST \
-              -H "Authorization: token $PAGES_DEPLOY_PAT" \
-              -H "Accept: application/vnd.github+json" \
-              "https://api.github.com/repos/$OWNER/$REPO/pages" \
-              -d '{"build_type":"workflow"}'
-            echo "Waiting for Pages provisioning..."
-            sleep 5
-          else
-            echo "REST fallback not needed or no PAT provided."
-          fi
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
@@ -117,3 +94,52 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deploy
         uses: actions/deploy-pages@v4
+        continue-on-error: true
+
+      - name: Show primary deploy outcome
+        run: echo "deploy outcome = '${{ steps.deploy.outcome }}'"
+
+      # --------------- 2차 폴백: 클래식 Pages(gh-pages 브랜치) ----------------
+      # 필요시(1차 실패) Pages를 REST로 legacy 모드(Deploy from a branch)에 활성화
+      - name: Enable legacy Pages via REST (optional)
+        if: ${{ always() && steps.deploy.outcome != 'success' }}
+        env:
+          PAGES_DEPLOY_PAT: ${{ secrets.PAGES_DEPLOY_PAT }}  # 선택: 있으면 자동 enable
+        run: |
+          if [ -n "$PAGES_DEPLOY_PAT" ]; then
+            echo "Enabling legacy GitHub Pages (branch=gh-pages) via REST..."
+            REF="${{ github.repository }}"        # e.g. owner/repo
+            OWNER="${REF%%/*}"
+            REPO="${REF##*/}"
+            # Create or update Pages site to legacy(branch) mode
+            # Try POST first, if exists then PUT
+            set -e
+            create_payload='{"build_type":"legacy","source":{"branch":"gh-pages","path":"/"}}'
+            update_payload='{"cname":null,"https_enforced":true,"build_type":"legacy","source":{"branch":"gh-pages","path":"/"}}'
+            # Create
+            curl -fsSL -X POST \
+              -H "Authorization: token $PAGES_DEPLOY_PAT" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/$OWNER/$REPO/pages" \
+              -d "$create_payload" || \
+            # Update if already exists
+            curl -fsSL -X PUT \
+              -H "Authorization: token $PAGES_DEPLOY_PAT" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/$OWNER/$REPO/pages" \
+              -d "$update_payload"
+            echo "Waiting for Pages provisioning..."
+            sleep 5
+          else
+            echo "::warning::PAGES_DEPLOY_PAT is not set; if deploy-pages failed, you may need to enable Pages manually: Settings → Pages → 'Deploy from a branch' (gh-pages / root)."
+          fi
+
+      # gh-pages 브랜치로 정적 사이트 발행(1차 실패시에만)
+      - name: Publish via gh-pages (fallback)
+        if: ${{ always() && steps.deploy.outcome != 'success' }}
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./site
+          publish_branch: gh-pages
+          force_orphan: true

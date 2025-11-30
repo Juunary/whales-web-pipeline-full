@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ethereum Whale Portfolio — Dynamic Dashboard</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdn.plot.ly/plotly-2.30.0.min.js"></script>
+</head>
+<body>
+  <header>
+    <h1>Ethereum Whale Portfolio (Dynamic)</h1>
+    <div id="asof"></div>
+    <div class="price-header">
+      <h3>24H Token Price Change</h3>
+      <table id="price-table">
+        <thead><tr><th>Contract</th><th>24H %</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </header>
+
+  <section class="cards">
+    <div class="card">
+      <h3>Average Portfolio Weights (Equal-Weight)</h3>
+      <div id="avg-ew"></div>
+    </div>
+    <div class="card">
+      <h3>Average Portfolio Weights (Value-Weight)</h3>
+      <div id="avg-vw"></div>
+    </div>
+  </section>
+
+  <section>
+    <h3>Sample — Top 10 Wallets</h3>
+    <div id="sample-table"></div>
+  </section>
+
+  <section>
+    <h3>Δ Weight Heatmaps (T vs Past)</h3>
+    <div class="heatmaps">
+      <figure>
+        <img src="images/heatmap_1m.png" alt="Δ 1M Heatmap" />
+        <figcaption>1 Month</figcaption>
+      </figure>
+      <figure>
+        <img src="images/heatmap_1w.png" alt="Δ 1W Heatmap" />
+        <figcaption>1 Week</figcaption>
+      </figure>
+      <figure>
+        <img src="images/heatmap_24h.png" alt="Δ 24H Heatmap" />
+        <figcaption>24 Hours</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <footer>
+    <p>Sources: Etherscan, Moralis, CoinGecko. Deployed via GitHub Actions.</p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

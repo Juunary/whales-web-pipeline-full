@@ -1,0 +1,22 @@
+{
+  "timestamp_utc": 1765025267,
+  "blocks": {
+    "now": 23953931,
+    "m1": 23740334,
+    "w1": 23904415,
+    "h24": 23946841
+  },
+  "averages_T": {
+    "equal_weight": {
+      "BTC": 0.0,
+      "STABLE": 0.0,
+      "ALT": 0.0
+    },
+    "value_weight": {
+      "BTC": 0.0,
+      "STABLE": 0.0,
+      "ALT": 0.0
+    }
+  },
+  "wallet_count": 6
+}
